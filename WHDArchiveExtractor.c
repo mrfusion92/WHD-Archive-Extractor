@@ -118,7 +118,7 @@ char *get_executable_version(const char *filePath);
 
 int num_lzx_archives_found = 0;
 int num_lha_archives_found = 0;
-
+int num_zip_archives_found = 0;
 
 
 /**
@@ -309,7 +309,7 @@ int does_file_exist(char *filename)
  */
 int does_folder_exists(const char *folder_name)
 {
-  BPTR lock = Lock((CONST_STRPTR)folder_name, ACCESS_READ);
+  BPTR lock = Lock(folder_name, ACCESS_READ);
   if (lock != 0)
   {
     UnLock(lock);
@@ -417,6 +417,7 @@ void get_directory_contents(STRPTR input_directory_path, STRPTR output_directory
   char current_file_path[256];
   char ExtractCommand[20];
   char extraction_command[256];
+  char makedir_command[256];
   char ExtractTargetCommand[4];
   char *directoryName;
   char program_name[6];
@@ -429,7 +430,7 @@ void get_directory_contents(STRPTR input_directory_path, STRPTR output_directory
 
   printf("Scanning directory: %s\n", input_directory_path);
 
-  dir_lock = Lock((CONST_STRPTR)input_directory_path, ACCESS_READ);
+  dir_lock = Lock(input_directory_path, ACCESS_READ);
   if (dir_lock)
   {
     file_info_block = (struct FileInfoBlock *)AllocMem(sizeof(struct FileInfoBlock), MEMF_CLEAR);
@@ -466,7 +467,7 @@ void get_directory_contents(STRPTR input_directory_path, STRPTR output_directory
             {
               get_file_extension(file_info_block->fib_FileName, file_extension);
 
-              if (strcmp(file_extension, ".LHA") == 0 || strcmp(file_extension, ".LZX") == 0)
+              if (strcmp(file_extension, ".LHA") == 0 || strcmp(file_extension, ".LZX") == 0 || strcmp(file_extension, ".ZIP") == 0)
               {
                 file_path_tmp = get_file_path(remove_text(current_file_path, input_file_path));
                 if (file_path_tmp) {
@@ -581,7 +582,8 @@ void get_directory_contents(STRPTR input_directory_path, STRPTR output_directory
                     strcpy(ExtractCommand, "-T -M -N -m x\0");
                   }
                 }
-                else
+				
+                if (strcmp(file_extension, ".LZX") == 0)
                 {
                   num_lzx_archives_found++;
                   strcpy(ExtractTargetCommand, lzx_extract_target_command);
@@ -596,6 +598,20 @@ void get_directory_contents(STRPTR input_directory_path, STRPTR output_directory
                   }
                 }
 
+                if (strcmp(file_extension, ".ZIP") == 0)
+                {
+                  num_zip_archives_found++;
+                  strcpy(ExtractTargetCommand, "-d\0");
+                  strcpy(program_name, "c:unzip");
+                  if (test_archives_only)
+                  {
+                    strcpy(ExtractCommand, "-t\0");
+                  }
+                  else
+                  {
+                    strcpy(ExtractCommand, "-n -q\0");
+                  }
+                }
                 
                 /* Check for disk space before extracting */
                 should_stop_app = 0;
@@ -623,6 +639,20 @@ void get_directory_contents(STRPTR input_directory_path, STRPTR output_directory
                   /* Combine the extraction command, source
                    * path, and output path */
                   file_path_tmp = get_file_path(remove_text(current_file_path, input_file_path));
+				  
+				  if (strcmp(file_extension, ".ZIP") == 0)
+				  {
+					strcpy(makedir_command, "c:makepath");
+					strcat(makedir_command, " \"");
+					strcat(makedir_command, output_directory_path);
+					strcat(makedir_command, "/");
+					strcat(makedir_command, file_path_tmp);
+					strcat(makedir_command, "\"");
+					
+					sanitize_amiga_path(makedir_command);		  							  
+					command_result = SystemTagList(makedir_command, NULL);
+				  }
+				  
                   if (file_path_tmp) {
                       needed = strlen(program_name) + 1 + strlen(ExtractCommand) + 3 + strlen(current_file_path) + 3 + strlen(ExtractTargetCommand) + 3 + strlen(output_directory_path) + 1 + strlen(file_path_tmp) + 2 + 1;
                       if (needed <= sizeof(extraction_command)) {
@@ -909,11 +939,11 @@ int main(int argc, char *argv[])
   printf(
       "Scanned \x1B[1m%d\x1B[0m directories and found \x1B[1m%d\x1B[0m "
       "archives.\n",
-      num_directories_scanned, num_lha_archives_found + num_lzx_archives_found);
+      num_directories_scanned, num_lha_archives_found + num_lzx_archives_found + num_zip_archives_found);
   printf(
-      "Archives composed of \x1B[1m%d\x1B[0m LHA and \x1B[1m%d\x1B[0m "
-      "LZX archives.\n",
-      num_lha_archives_found, num_lzx_archives_found);
+      "Archives composed of \x1B[1m%d\x1B[0m LHA, \x1B[1m%d\x1B[0m "
+      "LZX archives and \x1B[1m%d\x1B[0m ZIP archives.\n",
+      num_lha_archives_found, num_lzx_archives_found, num_zip_archives_found);
 
   if (num_lzx_archives_found > 0)
   {
@@ -942,7 +972,7 @@ char *get_executable_version(const char *filePath)
 
     /* Create and execute the version command */
     sprintf(command, "version %s >ram:v.txt", filePath);
-    SystemTagList((CONST_STRPTR)command, NULL);
+    SystemTagList(command, NULL);
 
     /* Open the version file */
     versionFile = fopen("ram:v.txt", "r");

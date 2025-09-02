@@ -579,7 +579,7 @@ void get_directory_contents(STRPTR input_directory_path, STRPTR output_directory
                     }
                     DeleteFile("ram:listing.txt");
                     ExtractCommand[0] = '\0';
-                    strcpy(ExtractCommand, "-T -M -N -m x\0");
+                    strcpy(ExtractCommand, "-T -M -N -m -q x\0");
                   }
                 }
 				
@@ -642,13 +642,18 @@ void get_directory_contents(STRPTR input_directory_path, STRPTR output_directory
 				  
 				  if (strcmp(file_extension, ".ZIP") == 0)
 				  {
-					strcpy(makedir_command, "c:makepath");
-					strcat(makedir_command, " \"");
+					size_t len = strlen(file_info_block->fib_FileName);
+					file_info_block->fib_FileName[len - 4] = '\0';
+					
+					strcat(file_path_tmp, "/");
+					strcat(file_path_tmp, file_info_block->fib_FileName);
+					
+					strcpy(makedir_command, "c:makepath \"");
 					strcat(makedir_command, output_directory_path);
 					strcat(makedir_command, "/");
 					strcat(makedir_command, file_path_tmp);
 					strcat(makedir_command, "\"");
-					
+															
 					sanitize_amiga_path(makedir_command);		  							  
 					command_result = SystemTagList(makedir_command, NULL);
 				  }
